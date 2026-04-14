@@ -11,16 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4 # 更新到 v4
+
+      - name: Set up Docker Buildx # 建議加上這個，讓 Build 更穩定
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3 # 更新到 v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and Push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5 # 更新到 v5
         with:
           context: ./app
           push: true
@@ -28,11 +31,19 @@ jobs:
 
       - name: Update Config Repo
         run: |
+          # 1. 使用 Token Clone (確認 Secret 名稱正確)
           git clone https://x-access-token:${{ secrets.tokenfordockerhublab }}@github.com/francesshenaiclass/argocd-config.git
           cd argocd-config
-          sed -i "s|image: .*/docker-fastapi:.*|image: ${{ secrets.DOCKER_USERNAME }}/docker-fastapi:${{ github.sha }}|" deployment.yaml
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          
+          # 2. 設定 Git 身份 (若沒設定，Commit 會報錯)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 3. 更新 Deployment YAML 內的 Image tag
+          # 這裡的 sed 邏輯要確保對準你的 deployment.yaml 內容格式
+          sed -i "s|image: ${{ secrets.DOCKER_USERNAME }}/docker-fastapi:.*|image: ${{ secrets.DOCKER_USERNAME }}/docker-fastapi:${{ github.sha }}|g" deployment.yaml
+          
+          # 4. 提交並推送到 main 分支
           git add deployment.yaml
           git commit -m "chore: update image to ${{ github.sha }}"
-          git push
+          git push origin main
